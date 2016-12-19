@@ -121,7 +121,7 @@ type ShopLedger_Holder struct {
 //==============================================================================================================================
 //	Init Function - Called when the user deploys the chaincode																	
 //==============================================================================================================================
-func (t *CardTransactionChaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+func (t *CardTransactionChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 	
 	// create and put card_holder
 	var cardKakaIDs Card_Holder
@@ -155,7 +155,7 @@ func (t *CardTransactionChaincode) Init(stub *shim.ChaincodeStub, function strin
 //	 add_user - Adds a new ecert and user pair to the table of ecerts
 //==============================================================================================================================
 /*
-func (t *CardTransactionChaincode) init_shopLedger_holder(stub *shim.ChaincodeStub, shop string) (ShopLedger_Holder, error) {
+func (t *CardTransactionChaincode) init_shopLedger_holder(stub shim.ChaincodeStubInterface, shop string) (ShopLedger_Holder, error) {
 	
 	shopLedgersBytes, err := stub.GetState(shop)
 	if err != nil {	fmt.Printf("RETRIEVE_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
@@ -184,7 +184,7 @@ func (t *CardTransactionChaincode) get_shopLedgerID(shop string, templateID stri
 	return templateID + "-" + shop
 }
 
-func (t *CardTransactionChaincode) add_new_shopLedger(stub *shim.ChaincodeStub, shopid string, templateID string) ([]byte, error) {
+func (t *CardTransactionChaincode) add_new_shopLedger(stub shim.ChaincodeStubInterface, shopid string, templateID string) ([]byte, error) {
 	
 	shopLedgerId := t.get_shopLedgerID(shopid, templateID)
 	shopLedgerBytes, err := stub.GetState(shopLedgerId)
@@ -225,7 +225,7 @@ func (t *CardTransactionChaincode) add_new_shopLedger(stub *shim.ChaincodeStub, 
 }
 
 
-func (t *CardTransactionChaincode) get_shopLedger(stub *shim.ChaincodeStub, shopid string, templateID string) ([]byte, error) {
+func (t *CardTransactionChaincode) get_shopLedger(stub shim.ChaincodeStubInterface, shopid string, templateID string) ([]byte, error) {
 	
 	shopLedgerId := t.get_shopLedgerID(shopid, templateID)
 	shopLedgerBytes, err := stub.GetState(shopLedgerId)
@@ -235,7 +235,7 @@ func (t *CardTransactionChaincode) get_shopLedger(stub *shim.ChaincodeStub, shop
 	return shopLedgerBytes, nil
 }
 
-func (t *CardTransactionChaincode) update_shopLedger(stub *shim.ChaincodeStub, shopid string, templateID string, shopLedger ShopLedger) ([]byte, error) {
+func (t *CardTransactionChaincode) update_shopLedger(stub shim.ChaincodeStubInterface, shopid string, templateID string, shopLedger ShopLedger) ([]byte, error) {
 	
 	shopLedgerId := t.get_shopLedgerID(shopid, templateID)
 																															
@@ -251,7 +251,7 @@ func (t *CardTransactionChaincode) update_shopLedger(stub *shim.ChaincodeStub, s
 }
 
 /*
-func (t *CardTransactionChaincode) get_shopLedger_holder(stub *shim.ChaincodeStub, shop string) (ShopLedger_Holder, error) {
+func (t *CardTransactionChaincode) get_shopLedger_holder(stub shim.ChaincodeStubInterface, shop string) (ShopLedger_Holder, error) {
 	
 	shopLedgersBytes, err := stub.GetState(shop)
 	if err != nil {	fmt.Printf("RETRIEVE_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
@@ -269,7 +269,7 @@ func (t *CardTransactionChaincode) get_shopLedger_holder(stub *shim.ChaincodeStu
 }
 */
 
-func (t *CardTransactionChaincode) add_user(stub *shim.ChaincodeStub, user User) ([]byte, error) {
+func (t *CardTransactionChaincode) add_user(stub shim.ChaincodeStubInterface, user User) ([]byte, error) {
 	
 
 	ubytes, err := json.Marshal(user)
@@ -317,7 +317,7 @@ func (t *CardTransactionChaincode) add_user(stub *shim.ChaincodeStub, user User)
 //	 check_affiliation
 //==============================================================================================================================
 
-func (t *CardTransactionChaincode) check_affiliation(stub *shim.ChaincodeStub, userName string) (int, error) {
+func (t *CardTransactionChaincode) check_affiliation(stub shim.ChaincodeStubInterface, userName string) (int, error) {
 	
 	user, err := t.get_user_detail_Internal(stub, userName)
 	if err != nil { return -1, err }
@@ -330,7 +330,7 @@ func (t *CardTransactionChaincode) check_affiliation(stub *shim.ChaincodeStub, u
 //	 get_users - Takes the name passed and calls out to the REST API for HyperLedger to retrieve the ecert
 //				 for that user. Returns the ecert as retrived including html encoding.
 //==============================================================================================================================
-func (t *CardTransactionChaincode) get_users(stub *shim.ChaincodeStub,caller string) ([]byte, error) {
+func (t *CardTransactionChaincode) get_users(stub shim.ChaincodeStubInterface,caller string) ([]byte, error) {
 
 	//caller_affiliation, _ := t.check_affiliation(stub, caller)
 
@@ -352,7 +352,7 @@ func (t *CardTransactionChaincode) get_users(stub *shim.ChaincodeStub,caller str
 //==============================================================================================================================
 //	 get_user_detail - 
 //==============================================================================================================================
-func (t *CardTransactionChaincode) get_user_detail_Internal(stub *shim.ChaincodeStub, name string) (User, error) {
+func (t *CardTransactionChaincode) get_user_detail_Internal(stub shim.ChaincodeStubInterface, name string) (User, error) {
 	
 	var u User
 
@@ -388,7 +388,7 @@ func (t *CardTransactionChaincode) get_user_detail_Internal(stub *shim.Chaincode
 //==============================================================================================================================
 //	 get_user_detail - 
 //==============================================================================================================================
-func (t *CardTransactionChaincode) get_user_detail(stub *shim.ChaincodeStub, caller string, name string) (User, error) {
+func (t *CardTransactionChaincode) get_user_detail(stub shim.ChaincodeStubInterface, caller string, name string) (User, error) {
 	
 	return t.get_user_detail_Internal(stub, name)
 }
@@ -400,7 +400,7 @@ func (t *CardTransactionChaincode) get_user_detail(stub *shim.ChaincodeStub, cal
 //				  Returns the username as a string.
 //==============================================================================================================================
 /*
-func (t *CardTransactionChaincode) get_username(stub *shim.ChaincodeStub) (string, error) {
+func (t *CardTransactionChaincode) get_username(stub shim.ChaincodeStubInterface) (string, error) {
 
 	bytes, err := stub.GetCallerCertificate();
 															if err != nil { return "", errors.New("Couldn't retrieve caller certificate") }
@@ -415,7 +415,7 @@ func (t *CardTransactionChaincode) get_username(stub *shim.ChaincodeStub) (strin
 // 				  		certificates common name. The affiliation is stored as part of the common name.
 //==============================================================================================================================
 /*
-func (t *CardTransactionChaincode) check_affiliation(stub *shim.ChaincodeStub, cert string) (int, error) {																																																					
+func (t *CardTransactionChaincode) check_affiliation(stub shim.ChaincodeStubInterface, cert string) (int, error) {																																																					
 	
 
 	decodedCert, err := url.QueryUnescape(cert);    				// make % etc normal //
@@ -443,7 +443,7 @@ func (t *CardTransactionChaincode) check_affiliation(stub *shim.ChaincodeStub, c
 //					 name passed.
 //==============================================================================================================================
 
-func (t *CardTransactionChaincode) get_caller_data(stub *shim.ChaincodeStub) (string, int, error){	
+func (t *CardTransactionChaincode) get_caller_data(stub shim.ChaincodeStubInterface) (string, int, error){	
 
 	user, err := t.get_username(stub)
 	if err != nil { return "", -1, err }
@@ -466,7 +466,7 @@ func (t *CardTransactionChaincode) get_caller_data(stub *shim.ChaincodeStub) (st
 //	Invoke - Called on chaincode invoke. Takes a function name passed and calls that function. Converts some
 //		  initial arguments passed to other things for use in the called function e.g. name -> ecert
 //==============================================================================================================================
-func (t *CardTransactionChaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+func (t *CardTransactionChaincode) Invoke(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 	
 	//caller, caller_affiliation, err := t.get_caller_data(stub)
 	caller := args[0]
@@ -629,7 +629,7 @@ fmt.Printf("spend_mp_consumer_to_shop 13")
 //	Query - Called on chaincode query. Takes a function name passed and calls that function. Passes the
 //  		initial arguments passed are passed on to the called function.
 //=================================================================================================================================	
-func (t *CardTransactionChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+func (t *CardTransactionChaincode) Query(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 													
 	//caller, caller_affiliation, err := t.get_caller_data(stub)
 	//if err != nil { fmt.Printf("QUERY: Error retrieving caller details", err); return nil, errors.New("QUERY: Error retrieving caller details: "+err.Error()) }
@@ -684,7 +684,7 @@ func (t *CardTransactionChaincode) Query(stub *shim.ChaincodeStub, function stri
 //	 authority_to_manufacturer
 //=================================================================================================================================
 /*
-func (t *CardTransactionChaincode) kakacenter_to_shop(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
+func (t *CardTransactionChaincode) kakacenter_to_shop(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
 	
 	if     	v.status				== STATE_TEMPLATE	&&
 			v.owner					== caller			&&
@@ -718,7 +718,7 @@ func (t *CardTransactionChaincode) kakacenter_to_shop(stub *shim.ChaincodeStub, 
 //   save_card - Writes to the ledger the Card struct passed in a JSON format. Uses the shim file's 
 //				  method 'PutState'.
 //==============================================================================================================================
-func (t *CardTransactionChaincode) save_template(stub *shim.ChaincodeStub, v Card) (bool, error) {
+func (t *CardTransactionChaincode) save_template(stub shim.ChaincodeStubInterface, v Card) (bool, error) {
 	 
 	bytes, err := json.Marshal(v)
 	if err != nil { fmt.Printf("SAVE_CHANGES: Error converting card card record: %s", err); return false, errors.New("Error converting card record") }
@@ -733,7 +733,7 @@ func (t *CardTransactionChaincode) save_template(stub *shim.ChaincodeStub, v Car
 // save_card - Writes to the ledger the Card struct passed in a JSON format. Uses the shim file's 
 //				  method 'PutState'.
 //==============================================================================================================================
-func (t *CardTransactionChaincode) save_card(stub *shim.ChaincodeStub, v Card) (bool, error) {
+func (t *CardTransactionChaincode) save_card(stub shim.ChaincodeStubInterface, v Card) (bool, error) {
 	 
 	bytes, err := json.Marshal(v)
 	if err != nil { fmt.Printf("SAVE_CHANGES: Error converting card card record: %s", err); return false, errors.New("Error converting card record") }
@@ -754,7 +754,7 @@ func (t *CardTransactionChaincode) save_card(stub *shim.ChaincodeStub, v Card) (
 //					JSON into the Card struct for use in the contract. Returns the Card struct.
 //					Returns empty v if it errors.
 //==============================================================================================================================
-func (t *CardTransactionChaincode) retrieve_card(stub *shim.ChaincodeStub, cardID string) (Card, error) {
+func (t *CardTransactionChaincode) retrieve_card(stub shim.ChaincodeStubInterface, cardID string) (Card, error) {
 	
 	var v Card
 
@@ -772,7 +772,7 @@ func (t *CardTransactionChaincode) retrieve_card(stub *shim.ChaincodeStub, cardI
 //					JSON into the Card struct for use in the contract. Returns the Card struct.
 //					Returns empty v if it errors.
 //==============================================================================================================================
-func (t *CardTransactionChaincode) get_Shopid(stub *shim.ChaincodeStub, caller string) (string) {
+func (t *CardTransactionChaincode) get_Shopid(stub shim.ChaincodeStubInterface, caller string) (string) {
 
 	return caller
 }
@@ -783,7 +783,7 @@ func (t *CardTransactionChaincode) get_Shopid(stub *shim.ChaincodeStub, caller s
 //	 Create Card Template- 								
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) create_card_template(stub *shim.ChaincodeStub, caller string, caller_affiliation int, templateID string) ([]byte, error) {								
+func (t *CardTransactionChaincode) create_card_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, templateID string) ([]byte, error) {								
 
 	fmt.Printf("start  create_card_template \n ");
 
@@ -883,7 +883,7 @@ func (t *CardTransactionChaincode) create_card_template(stub *shim.ChaincodeStub
 //=================================================================================================================================
 //	 transfer temaplte from kakacenter to shop
 //=================================================================================================================================
-func (t *CardTransactionChaincode) transfer_template_to_shop(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
+func (t *CardTransactionChaincode) transfer_template_to_shop(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
 
 
 	if      v.Kakaid	== "UNDEFINED" {					//If key part of the card is undefined it has not been fully manufacturered so cannot be sent
@@ -916,7 +916,7 @@ func (t *CardTransactionChaincode) transfer_template_to_shop(stub *shim.Chaincod
 	
 }
 /*
-func (t *CardTransactionChaincode) update_template(stub *shim.ChaincodeStub, caller string, caller_affiliation int,cardTemplateId string, updatedCardJson string)([]byte, error) {
+func (t *CardTransactionChaincode) update_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int,cardTemplateId string, updatedCardJson string)([]byte, error) {
 	
 	if 		v.Status				== STATE_TEMPLATE	&& 
 			v.Owner					== caller		&& 
@@ -954,7 +954,7 @@ func (t *CardTransactionChaincode) checkCardId(cardId string) (bool) {
 	return strings.Contains(cardId, "-")
 }
 
-func (t *CardTransactionChaincode) create_card_by_template(stub *shim.ChaincodeStub, caller string, caller_affiliation int, cardTemplate_KakaIDs string, cardNum int) ([]byte, error) {								
+func (t *CardTransactionChaincode) create_card_by_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, cardTemplate_KakaIDs string, cardNum int) ([]byte, error) {								
 
 	if 	caller_affiliation != SHOP {							// Only the regulator can create a new v5c
 		return nil, errors.New("Permission Denied")
@@ -1059,7 +1059,7 @@ func (t *CardTransactionChaincode) create_card_by_template(stub *shim.ChaincodeS
 //=================================================================================================================================
 //	 manufacturer_to_private
 //=================================================================================================================================
-func (t *CardTransactionChaincode) request_card_by_template(stub *shim.ChaincodeStub, caller string, caller_affiliation int, cardTemplate_KakaIDs string) ([]byte, error) {								
+func (t *CardTransactionChaincode) request_card_by_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, cardTemplate_KakaIDs string) ([]byte, error) {								
 
 	if 	caller_affiliation !=  CONSUMER {							// Only the regulator can create a new v5c
 		return nil, errors.New("Permission Denied")
@@ -1154,7 +1154,7 @@ func (t *CardTransactionChaincode) request_card_by_template(stub *shim.Chaincode
 //=================================================================================================================================
 //	 manufacturer_to_private
 //=================================================================================================================================
-func (t *CardTransactionChaincode) transfer_card_shop_to_consumer(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
+func (t *CardTransactionChaincode) transfer_card_shop_to_consumer(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
 
 
 	if 		v.Shop 	 	== "UNDEFINED" || 					
@@ -1194,7 +1194,7 @@ func (t *CardTransactionChaincode) transfer_card_shop_to_consumer(stub *shim.Cha
 //=================================================================================================================================
 //	 private_to_private
 //=================================================================================================================================
-func (t *CardTransactionChaincode) transfer_card_consumer_to_consumer(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
+func (t *CardTransactionChaincode) transfer_card_consumer_to_consumer(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
 	
 
 	if 		v.Status				== STATE_CONSUMER_OWNERSHIP	&&
@@ -1226,7 +1226,7 @@ func (t *CardTransactionChaincode) transfer_card_consumer_to_consumer(stub *shim
 //=================================================================================================================================
 //	 private_to_lease_company
 //=================================================================================================================================
-func (t *CardTransactionChaincode) transfer_card_consumer_to_shop(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
+func (t *CardTransactionChaincode) transfer_card_consumer_to_shop(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
 
 	if 		v.Status				== STATE_CONSUMER_OWNERSHIP	&& 
 			v.Owner					== caller					&& 
@@ -1252,12 +1252,12 @@ func (t *CardTransactionChaincode) transfer_card_consumer_to_shop(stub *shim.Cha
 }
 
 
-func (t *CardTransactionChaincode) transfer_mp_shop_to_consumer(stub *shim.ChaincodeStub, money int, point int, caller string, sc Card, receiver string, tc Card) ([]byte, error) {
+func (t *CardTransactionChaincode) transfer_mp_shop_to_consumer(stub shim.ChaincodeStubInterface, money int, point int, caller string, sc Card, receiver string, tc Card) ([]byte, error) {
 
 		return nil, errors.New("not implemented")
 }
 
-func (t *CardTransactionChaincode) transfer_mp_consumer_to_shop(stub *shim.ChaincodeStub, money int, point int, caller string, sc Card, receiver string, tc Card) ([]byte, error) {
+func (t *CardTransactionChaincode) transfer_mp_consumer_to_shop(stub shim.ChaincodeStubInterface, money int, point int, caller string, sc Card, receiver string, tc Card) ([]byte, error) {
 
 		return nil, errors.New("not implemented")
 }
@@ -1266,7 +1266,7 @@ func (t *CardTransactionChaincode) transfer_mp_consumer_to_shop(stub *shim.Chain
 //=================================================================================================================================
 //	 transfer_mp_consumer_to_consumer
 //=================================================================================================================================
-func (t *CardTransactionChaincode) transfer_mp_consumer_to_consumer(stub *shim.ChaincodeStub, money int, point int, caller string, sc Card, receiver string, tc Card) ([]byte, error) {
+func (t *CardTransactionChaincode) transfer_mp_consumer_to_consumer(stub shim.ChaincodeStubInterface, money int, point int, caller string, sc Card, receiver string, tc Card) ([]byte, error) {
 fmt.Printf("start transfer_mp_consumer_to_consumer")
 	if sc.Money < money || sc.Point < point{
 		fmt.Printf("money or point is not enough")
@@ -1320,7 +1320,7 @@ fmt.Printf("test 1")
 //=================================================================================================================================
 //	 deposit_mp_shop_to_consumer
 //=================================================================================================================================
-func (t *CardTransactionChaincode) deposit_mp_shop_to_consumer(stub *shim.ChaincodeStub, money int, point int, caller string, receiver string, tc Card) ([]byte, error) {
+func (t *CardTransactionChaincode) deposit_mp_shop_to_consumer(stub shim.ChaincodeStubInterface, money int, point int, caller string, receiver string, tc Card) ([]byte, error) {
 
 	fmt.Printf("start deposit_mp_shop_to_consumer")
 
@@ -1380,7 +1380,7 @@ func (t *CardTransactionChaincode) deposit_mp_shop_to_consumer(stub *shim.Chainc
 //=================================================================================================================================
 //	 spend_mp_consumer_to_consumer
 //=================================================================================================================================
-func (t *CardTransactionChaincode) spend_mp_consumer_to_shop(stub *shim.ChaincodeStub, money int, point int, caller string, sc Card, shopid string) ([]byte, error) {
+func (t *CardTransactionChaincode) spend_mp_consumer_to_shop(stub shim.ChaincodeStubInterface, money int, point int, caller string, sc Card, shopid string) ([]byte, error) {
 	
 	fmt.Printf("start spend_mp_consumer_to_consumer")
 	if sc.Money < money || sc.Point < point{
@@ -1444,7 +1444,7 @@ func (t *CardTransactionChaincode) spend_mp_consumer_to_shop(stub *shim.Chaincod
 //	 update_money
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_money(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_money(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	new_money, err := strconv.Atoi(new_value) 		                // will return an error if the new vin contains non numerical chars
 		if err != nil  { return nil, errors.New("Invalid value passed for money") }
@@ -1476,7 +1476,7 @@ func (t *CardTransactionChaincode) update_money(stub *shim.ChaincodeStub, v Card
 //	 update_point
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_point(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_point(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	new_point, err := strconv.Atoi(new_value)		                // will return an error if the new vin contains non numerical chars
 	if err != nil { return nil, errors.New("Invalid value passed for point") }
@@ -1508,7 +1508,7 @@ func (t *CardTransactionChaincode) update_point(stub *shim.ChaincodeStub, v Card
 //	 update_shop
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_shopid(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_shopid(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1535,7 +1535,7 @@ func (t *CardTransactionChaincode) update_shopid(stub *shim.ChaincodeStub, v Car
 //	 update_shop
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_shop(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_shop(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1561,7 +1561,7 @@ func (t *CardTransactionChaincode) update_shop(stub *shim.ChaincodeStub, v Card,
 //	 update_cardid
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_cardid(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_cardid(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1588,7 +1588,7 @@ func (t *CardTransactionChaincode) update_cardid(stub *shim.ChaincodeStub, v Car
 //=================================================================================================================================
 
 
-func (t *CardTransactionChaincode) update_cardlevel(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_cardlevel(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1614,7 +1614,7 @@ func (t *CardTransactionChaincode) update_cardlevel(stub *shim.ChaincodeStub, v 
 //	 update_cardclass
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_cardclass(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_cardclass(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1640,7 +1640,7 @@ func (t *CardTransactionChaincode) update_cardclass(stub *shim.ChaincodeStub, v 
 //	 update_password
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_password(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_password(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Owner				== caller				&& 
 			v.Scrapped			== false				{
@@ -1664,7 +1664,7 @@ func (t *CardTransactionChaincode) update_password(stub *shim.ChaincodeStub, v C
 //=================================================================================================================================
 //	 update_expdate
 //=================================================================================================================================
-func (t *CardTransactionChaincode) update_expdate(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_expdate(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 
 	if		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller		&& 
@@ -1690,7 +1690,7 @@ func (t *CardTransactionChaincode) update_expdate(stub *shim.ChaincodeStub, v Ca
 //=================================================================================================================================
 //	 scrap_card
 //=================================================================================================================================
-func (t *CardTransactionChaincode) scrap_card(stub *shim.ChaincodeStub, v Card, caller string) ([]byte, error) {
+func (t *CardTransactionChaincode) scrap_card(stub shim.ChaincodeStubInterface, v Card, caller string) ([]byte, error) {
 
 	if		v.Owner				== caller				&& 
 			v.Scrapped			== false				{
@@ -1712,7 +1712,7 @@ func (t *CardTransactionChaincode) scrap_card(stub *shim.ChaincodeStub, v Card, 
 //=================================================================================================================================
 //	 update_expired
 //=================================================================================================================================
-func (t *CardTransactionChaincode) update_expired(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, isexpired string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_expired(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, isexpired string) ([]byte, error) {
 
 	if		v.Owner				== caller				&& 
 			v.Scrapped			== false {
@@ -1740,7 +1740,7 @@ func (t *CardTransactionChaincode) update_expired(stub *shim.ChaincodeStub, v Ca
 //=================================================================================================================================
 //	 update_category
 //=================================================================================================================================
-func (t *CardTransactionChaincode) update_category(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_category(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 
 	if		v.Status			== STATE_CONSUMER_OWNERSHIP	&&
 			v.Owner				== caller			&& 
@@ -1765,7 +1765,7 @@ func (t *CardTransactionChaincode) update_category(stub *shim.ChaincodeStub, v C
 //=================================================================================================================================
 //	 update_tel
 //=================================================================================================================================
-func (t *CardTransactionChaincode) update_tel(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_tel(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 
 	if		v.Status			== STATE_CONSUMER_OWNERSHIP	&&
 			v.Owner				== caller		&& 
@@ -1800,7 +1800,7 @@ func (t *CardTransactionChaincode) update_tel(stub *shim.ChaincodeStub, v Card, 
 //=================================================================================================================================
 //	 get_card_details
 //=================================================================================================================================
-func (t *CardTransactionChaincode) get_card_details(stub *shim.ChaincodeStub, v Card, caller string, caller_affiliation int) ([]byte, error) {
+func (t *CardTransactionChaincode) get_card_details(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int) ([]byte, error) {
 	
 	bytes, err := json.Marshal(v)
 	
@@ -1822,7 +1822,7 @@ func (t *CardTransactionChaincode) get_card_details(stub *shim.ChaincodeStub, v 
 //	 get_card_templates
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) get_card_templates(stub *shim.ChaincodeStub, caller string, caller_affiliation int) ([]byte, error) {
+func (t *CardTransactionChaincode) get_card_templates(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int) ([]byte, error) {
 
 	bytes, err := stub.GetState(CARD_TEMPLATE_HOLDER)
 		
@@ -1865,7 +1865,7 @@ func (t *CardTransactionChaincode) get_card_templates(stub *shim.ChaincodeStub, 
 //	 get_cards
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) get_cards(stub *shim.ChaincodeStub, caller string, caller_affiliation int) ([]byte, error) {
+func (t *CardTransactionChaincode) get_cards(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int) ([]byte, error) {
 
 	bytes, err := stub.GetState(CARD_HOLDER)
 		
