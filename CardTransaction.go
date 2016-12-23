@@ -489,6 +489,12 @@ func (t *CardTransactionChaincode) Invoke(stub shim.ChaincodeStubInterface, func
 		fmt.Printf("------------create template function----------");
 		return t.create_card_template(stub, caller, caller_affiliation, args[cardIDPos])
 
+	} else if function == "create_card_template_by_shop" { 
+		fmt.Printf("------------create create_card_template_by_shop function----------");
+		templateId := args[cardIDPos]
+		templateJson := args[cardIDPos + 1]
+		return t.create_card_template_by_shop(stub, caller, caller_affiliation, templateId, templateJson)
+
 	} else if function == "transfer_template_to_shop" {
 
 		cardTemplateId := args[1]
@@ -879,6 +885,106 @@ func (t *CardTransactionChaincode) create_card_template(stub shim.ChaincodeStubI
 
 }
 
+
+//=================================================================================================================================									
+//	 Create Card Template  by Shop						
+//=================================================================================================================================
+
+func (t *CardTransactionChaincode) create_card_template_by_shop(stub *shim.ChaincodeStub, caller string, caller_affiliation int, templateID string, templateJson string) ([]byte, error) {								
+
+	fmt.Printf("start  create_card_template_by_shop \n ");
+
+	// build Card obejct by json
+	var v Card																																									
+	/*
+	kakaid          := "\"Kakaid\":\""+templateID+"\", "	
+	cardid          := "\"Cardid\":\"UNDEFINED\", "							
+	shop            := "\"Shop\":\"UNDEFINED\", "
+	shopid          := "\"Shopid\":\"UNDEFINED\", "
+	category        := "\"Category\":\"UNDEFINED\", "
+	cardlevel       := "\"Cardlevel\":\"UNDEFINED\", "
+	cardclass       := "\"Cardclass\":\"UNDEFINED\", "
+	owner           := "\"Owner\":\""+caller+"\", "
+	tel             := "\"Tel\":\"UNDEFINED\", "
+	password   	    := "\"Password\":\"UNDEFINED\", "
+	money           := "\"Money\":0, "
+	point           := "\"Point\":0, "
+	releasedate     := "\"Releasedate\":\"UNDEFINED\", "
+	expdate         := "\"Expdate\":\"UNDEFINED\", "
+	getdate         := "\"Getdate\":\"UNDEFINED\", "
+	expired			:= "\"Expired\":false, "
+	scrapped       	:= "\"Scrapped\":false, "
+	status       	:= "\"Status\":0 "
+
+	card_json := "{"+kakaid+cardid+shop+shopid+category+cardlevel+cardclass+owner+tel+password+money+point+releasedate+expdate+getdate+expired+scrapped+status+"}" 	// Concatenates the variables to create the total JSON object
+	*/
+	
+	fmt.Printf("test json: %s ",templateJson);
+
+	err := json.Unmarshal([]byte(templateJson), &v)		//  new card json -> Card Object
+	fmt.Printf("test 04 ");
+		if err != nil { 
+			fmt.Printf("test err is not nil , err is : %s",err);
+			return nil, errors.New("Invalid JSON object") 
+			
+			}
+
+	fmt.Printf("json to card tempalte object ");
+	fmt.Printf("json to card tempalte object :  kakaid = %s", v.Kakaid);
+	fmt.Printf("json to card tempalte object :  cardid = %s", v.Cardid);
+	fmt.Printf("json to card tempalte object :  owner = %s", v.Owner);
+
+	//if auth to create template
+	if 	caller_affiliation != KAKACENTER && caller_affiliation != SHOP{							// Only the regulator can create a new v5c
+		return nil, errors.New("Permission Denied")
+	}
+
+	matched, err := regexp.Match("^[A-z][A-z][A-z]", []byte(templateID))  	// 2 char + 5 digits
+		if err != nil  || matched ==false { fmt.Printf("CREATE_CARD: Invalid cardID: %s", err); return nil, errors.New("Invalid v5cID") }
+	
+	fmt.Printf("test 0 : %s",templateID);
+	record, err := stub.GetState(templateID) 			// check if card already exists
+	fmt.Printf("test 1 ");
+		if record != nil { return nil, errors.New("Card already exists") }
+	fmt.Printf("test 2 ");
+
+	//save template
+	_, err  = t.save_template(stub, v)									
+		if err != nil { fmt.Printf("CREATE_CARD_TEMPLATE: Error saving changes: %s", err); 
+						return nil, errors.New("Error saving changes") }
+	
+	fmt.Printf("save tamplate ok");
+
+	//save cardID in CARD_TEMPLATE_HOLDER
+	bytes, err := stub.GetState(CARD_TEMPLATE_HOLDER)
+		if err != nil { return nil, errors.New("Unable to get cardKakaIDs") }
+	
+	fmt.Print("get state this template  : %s", string(bytes))
+																	
+	var card_template_holder Card_Holder
+	
+	if len(bytes)!=0 {
+		fmt.Print(" template holder have data : %s", string(bytes))
+		
+		err = json.Unmarshal(bytes, &card_template_holder)
+		if err != nil {	return nil, errors.New("Corrupt Card_Template_Holder record") }
+	}
+	
+
+	card_template_holder.Cards = append(card_template_holder.Cards, templateID)
+	
+	fmt.Print("Marshal, holder num: %s ", string(len(card_template_holder.Cards)))
+	bytes, err = json.Marshal(card_template_holder)
+		if err != nil { fmt.Print("Error creating Card_Template_Holder record") }
+
+	fmt.Print("put state this template : %s", string(bytes))
+
+	err = stub.PutState(CARD_TEMPLATE_HOLDER, bytes)
+		if err != nil { return nil, errors.New("Unable to put the CARD_TEMPLATE_HOLDER state") }
+	
+	return nil, nil
+
+}
 
 //=================================================================================================================================
 //	 transfer temaplte from kakacenter to shop
