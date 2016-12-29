@@ -25,6 +25,7 @@ const   CONSUMER =  3		//PRIVATE_ENTITY
 const   MAILBOX  =  4		//LEASE_COMPANY
 //const   SCRAP_MERCHANT =  5	
 
+const	SHOP_HOLDER = "shop_holder"
 const	USER_HOLDER = "user_holder"
 const	CARD_TEMPLATE_HOLDER = "card_template_holder"
 const	CARD_HOLDER = "card_holder"
@@ -88,10 +89,25 @@ type Card_Holder struct {
 //	User_and_eCert - Struct for storing the JSON of a user and their ecert
 //==============================================================================================================================
 
+type Shop struct {
+	ShopId 				string `json:"shopid"`
+	ShopName 			string `json:"shopname"`
+	LicenseNum 		string `json:"licensenum"`
+	Address			string `json:"address"`
+	Category		string `json:"category"`
+	Contact			string `json:"contact"`
+}	
+
+type Shop_Holder struct {
+	Shops 		[]string `json:"shops"`
+}	
+
 type User struct {
 	Identity 		string `json:"identity"`
+	Name			string `json:"name"`
 	ECert 			string `json:"ecert"`
 	Affiliation 	int `json:"affiliation"`
+	AuthId			string  `json:"authid"`
 }	
 
 type User_Holder struct {
@@ -106,8 +122,8 @@ type ShopLedger struct {
 	ExpiredNum		int `json:"expiredNum"`
 	ScrapNum		int  `json:"scrapNum"`
 	BackNum			int  `json:"backNum"`
-	InitMoney 	int `json:"initmoney"`
-	InitPoint 	int `json:"initpoint"`
+	InitMoney 		int `json:"initmoney"`
+	InitPoint 		int `json:"initpoint"`
 	DepositMoney 	int `json:"depositMoney"`
 	DepositPoint 	int `json:"tdepositPoint"`
 	ConsumeMoney 	int `json:"consumeMoney"`
@@ -123,19 +139,41 @@ type ShopLedger_Holder struct {
 //==============================================================================================================================
 func (t *CardTransactionChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 	
-	// create and put card_holder
-	var cardKakaIDs Card_Holder
-	bytes, err := json.Marshal(cardKakaIDs)
-	if err != nil { return nil, errors.New("Error creating Card_Holder record") }											
-	err = stub.PutState(CARD_HOLDER, bytes)
+	// create and put shop_holder
+	var shop_holder Shop_Holder
+	bytes, err := json.Marshal(shop_holder)
+	if err != nil { return nil, errors.New("Error creating Shop_Holder record") }											
+	err = stub.PutState(SHOP_HOLDER, bytes)
 	
-	// create and put card_holder
+	// create and put user_holder
 	var user_holder User_Holder
 	bytes, err = json.Marshal(user_holder)
 	if err != nil { return nil, errors.New("Error creating User_Holder record") }														
 	err = stub.PutState(USER_HOLDER, bytes)
 
-	//add users
+	// create and put card_template_holder
+	var card_template_holder Card_Holder
+	bytes, err = json.Marshal(card_template_holder)
+	if err != nil { return nil, errors.New("Error creating Card_Template_Holder record") }											
+	err = stub.PutState(CARD_TEMPLATE_HOLDER, bytes)
+	
+	// create and put card_holder
+	var card_holder Card_Holder
+	bytes, err = json.Marshal(card_holder)
+	if err != nil { return nil, errors.New("Error creating Card_Holder record") }														
+	err = stub.PutState(CARD_HOLDER, bytes)
+
+	//add admin users
+	var adminUser User
+	adminUser.Identity = "admin"
+	adminUser.ECert = "admin"
+	adminUser.Affiliation = 1
+	adminUser.Name = "KaKa Blockchain Administrator"
+	adminUser.AuthId = "kakacenter"
+	t.add_user(stub, adminUser)	
+
+	//add init users
+	/*
 	for i:=0; i < len(args); i=i+3 {
 		var user User
 		user.Identity = args[i]
@@ -143,7 +181,7 @@ func (t *CardTransactionChaincode) Init(stub shim.ChaincodeStubInterface, functi
 		user.Affiliation, err = strconv.Atoi(args[i+2])
 			if err != nil { return nil, errors.New("ERROR: affiliation value is not int") }
 		t.add_user(stub, user)													
-	}
+	}*/
 
 
 	return nil, nil
@@ -180,8 +218,467 @@ func (t *CardTransactionChaincode) init_shopLedger_holder(stub shim.ChaincodeStu
 }
 */
 
+//==============================================================================================================================
+//	 General Functions -  manage user and shop
+//==============================================================================================================================
+//	 add_user - Adds a new user to both user_holder and state(by user.Identity)
+//==============================================================================================================================
+
+func (t *CardTransactionChaincode) get_user_holder(stub shim.ChaincodeStubInterface) (User_Holder, error) {
+
+	var user_holder User_Holder
+	usersBytes, err := stub.GetState(USER_HOLDER)
+	if err != nil {	fmt.Printf("RETRIEVE_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
+					return user_holder, errors.New("RETRIEVE_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
+	fmt.Printf("------------add user - user_holder bytes: "+string(usersBytes)); 
+
+	err = json.Unmarshal(usersBytes, &user_holder);						
+	if err != nil {	fmt.Printf("Unmarshal_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
+					return user_holder, errors.New("Unmarshal_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
+	return user_holder, nil
+}
+
+
+func (t *CardTransactionChaincode) save_user_holder(stub shim.ChaincodeStubInterface, user_holder User_Holder) ([]byte, error) {
+
+	usersBytes, err := json.Marshal(user_holder)
+		if err != nil { fmt.Printf("save user holder error: Marshal(user_holder) error"); 
+						return nil, errors.New("save user holder error: Marshal(user_holder) error") }
+	
+	fmt.Printf("json.Marshal(user_holder) bytes: "+string(usersBytes)); 
+
+	err = stub.PutState(USER_HOLDER, usersBytes)
+	if err != nil {
+		fmt.Printf("Error storing user_holder: %s", err)
+		return nil, errors.New("Error storing user_holder: " )
+	}
+	
+	fmt.Printf("------------store user holder success")
+	//return
+	return usersBytes, nil
+}
+
+
+func (t *CardTransactionChaincode) add_user(stub shim.ChaincodeStubInterface, user User) ([]byte, error) {
+	
+	ubytes, err := stub.GetState(user.Identity)
+		if err != nil {	fmt.Printf("query user " + string(ubytes) + " from state error: %s", err); 
+					return nil, errors.New("query user " + string(ubytes) + " from state error")	}
+	
+		if ubytes != nil {	fmt.Printf("user " + user.Identity + " already exists"); 
+					return ubytes, errors.New("user " + user.Identity + " already exists")	}
+	
+	ubytes, err = json.Marshal(user)
+	if err != nil { return nil, errors.New("Error creating User bytes") }
+	
+	fmt.Printf("------------add user - new user bytes: "+string(ubytes)); 
+
+	//add whole user object to user_holder
+	user_holder, err := t.get_user_holder(stub)
+	
+	fmt.Printf("------------add user - user_holder users num: " + string(len(user_holder.Users))); 
+
+	user_holder.Users = append(user_holder.Users, string(ubytes))
+
+    fmt.Printf("------------add user - new user_holder users num: " + string(len(user_holder.Users)));
+
+	t.save_user_holder(stub, user_holder)
+
+	//store user object to world state
+	err = stub.PutState(user.Identity, ubytes)
+	if err != nil {
+		fmt.Printf("------------put states by user.Identity: %s", err)
+		fmt.Printf("------------put states error,user iendtiry: "+ user.Identity)
+		return nil, errors.New("Error storing user: " + user.Identity )
+	}
+	return nil, nil
+
+}
+
+
+
+func (t *CardTransactionChaincode) update_user(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, user User) ([]byte, error) {
+	
+	_, err := t.delete_user(stub, caller, caller_affiliation, user.Identity)
+	if err != nil {
+		fmt.Printf("Error update user: %s", err)
+		return nil, errors.New("Error update user: ")
+	}
+
+	return t.add_user(stub, user)
+}
+
+//==============================================================================================================================
+//	 get_users - query user_holder for all users
+//        para - caller: for check permission. Not used now
+//==============================================================================================================================
+func (t *CardTransactionChaincode) get_users(stub shim.ChaincodeStubInterface,caller string) ([]byte, error) {
+
+	//caller_affiliation, _ := t.check_affiliation(stub, caller)
+
+	//if caller_affiliation == KAKACENTER {
+		usersBytes, err := stub.GetState(USER_HOLDER)
+		if err != nil {	fmt.Printf("RETRIEVE_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
+					return usersBytes, errors.New("RETRIEVE_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
+	
+		fmt.Printf("get_users , User_Holder bytes: "+string(usersBytes)); 
+
+		return usersBytes, nil
+	//}
+
+	//return nil, errors.New("Permission denied: you are not KAKACENTER users ")
+	
+}
+
+//==============================================================================================================================
+//	 get_user_detail - query user object with permission check. But no check now. so para caller not used yet
+//==============================================================================================================================
+func (t *CardTransactionChaincode) get_user_detail(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, name string) ([]byte, error) {
+	
+	user, err := t.get_user_detail_Internal(stub, name)
+    if err != nil { fmt.Printf("get_user_detail_Internal error"); 
+						return nil, errors.New("get_user_detail_Internal error") }
+	
+	ubytes, err := json.Marshal(user)
+		if err != nil { fmt.Printf("Marshal user error"); 
+						return nil, errors.New("Marshal user error") }
+	fmt.Printf("Marshal user :" + string(ubytes) ); 
+	return ubytes, nil
+}
+
+
+//==============================================================================================================================
+//	 get_user_detail_Internal - query user object from state without permission check
+//==============================================================================================================================
+func (t *CardTransactionChaincode) get_user_detail_Internal(stub shim.ChaincodeStubInterface, userId string) (User, error) {
+	
+	var u User
+
+	ubytes, err := stub.GetState(userId)
+		if err != nil {	fmt.Printf("query user " + string(ubytes) + " from state error: %s", err); 
+					return u, errors.New("query user " + string(ubytes) + " from state error")	}
+	
+		if ubytes == nil {	fmt.Printf("Error: no user " + userId + " in world state"); 
+					return u, errors.New("Error: no user " + userId + " in world state")	}
+	
+	fmt.Printf("Get user bytes from state : "+string(ubytes)); 
+
+	err = json.Unmarshal(ubytes, &u);						
+		if err != nil {	fmt.Printf("Unmarshal ubytes error:  %s", err); 
+						return u, errors.New("Unmarshal ubytes error")	}
+						
+	fmt.Printf("Unmarshal ubytes of user:  %s", u.Identity)
+
+	return u, nil
+	
+	/* // get user detail from user_holder. this func have been replaced by query user directly from worldstate by user.Identity
+	var user_holder User_Holder
+	usersBytes, err := stub.GetState(USER_HOLDER)
+	if err != nil {	fmt.Printf("RETRIEVE_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
+					return u, errors.New("RETRIEVE_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
+	
+	fmt.Printf("User_Holder bytes: "+string(usersBytes)); 
+
+	err = json.Unmarshal(usersBytes, &user_holder);						
+	if err != nil {	fmt.Printf("Unmarshal_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
+					return u, errors.New("Unmarshal_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
+	
+	
+	
+	for _, userStr := range user_holder.Users {
+		
+
+		err = json.Unmarshal([]byte(userStr), &u);						
+		if err != nil {	fmt.Printf("Unmarshal_userStr: Corrupt user record "+userStr+": %s", err); 
+		return u, errors.New("Unmarshal_userStr: Corrupt user record"+userStr)	}
+	
+		if u.Identity == name {return u,nil}
+		
+	}
+	
+	if err != nil { return u, errors.New("Couldn't retrieve user (" + name + ") from user_holder ") }
+	*/
+	
+}
+
+
+//==============================================================================================================================
+//	 delete_user - debugging, not released yet
+//==============================================================================================================================
+func (t *CardTransactionChaincode) delete_user(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, userId string) ([]byte, error) {
+	
+	ubytes, err := t.get_user_detail(stub, caller, caller_affiliation, userId)
+	if err != nil {	fmt.Printf("query user from state error: %s", err); 
+					return ubytes, errors.New("query user from state error")	}
+	fmt.Printf("Get user bytes from state : " + userId); 
+
+	//delete from state
+	err = stub.DelState(userId)
+		if err != nil {	fmt.Printf("delete user " + userId + " from state error: %s", err); 
+					return ubytes, errors.New("query user " + userId + " from state error")	}
+	fmt.Printf("Delete user bytes from state success : "+userId); 
+
+
+	//delete from user_holder
+	user_holder, err := t.get_user_holder(stub)
+	
+	var u User
+	ifdelete := 0
+	for index, userStr := range user_holder.Users {
+		err = json.Unmarshal([]byte(userStr), &u);						
+		if err != nil {	fmt.Printf("Unmarshal_userStr: Corrupt user record "+userStr+": %s", err); 
+		return nil, errors.New("Unmarshal_userStr: Corrupt user record"+userStr)	}
+	
+		if u.Identity == userId {
+			user_holder.Users = append(user_holder.Users[:index], user_holder.Users[index+1:]...) 
+			ifdelete = 1
+			break
+		}
+	}
+
+	if ifdelete == 1 {
+		fmt.Printf("delete user from user_holder success: "+userId); 
+	}else{
+		fmt.Printf("no delete user from user_holder: "+userId); 
+	}
+
+	t.save_user_holder(stub, user_holder)
+	
+	//return
+	return ubytes, nil
+	
+}
+
+//==============================================================================================================================
+//	 check_affiliation
+//==============================================================================================================================
+
+func (t *CardTransactionChaincode) check_affiliation(stub shim.ChaincodeStubInterface, userId string) (int, error) {
+	
+	fmt.Printf("invoke  check_affiliation internally ")
+	user, err := t.get_user_detail_Internal(stub, userId)
+	if err != nil { return -1, err }
+	
+	return user.Affiliation, nil
+}
+
+func (t *CardTransactionChaincode) check_user(stub shim.ChaincodeStubInterface, userId string) (int, error) {
+	
+	fmt.Printf("invoke  check_user internally ")
+	user, err := t.get_user_detail_Internal(stub, userId)
+	if err != nil { return -1, err }
+	if user.Identity != ""{
+		return 1, nil
+	}
+	return 0, nil
+}
+
+//==============================================================================================================================
+//	 add_shop - Adds a new shop to both sjop_holder and state(by shop.ShopdId)
+//==============================================================================================================================
+
+func (t *CardTransactionChaincode) get_shop_holder(stub shim.ChaincodeStubInterface) (Shop_Holder, error) {
+
+	var shop_holder Shop_Holder
+	shopsBytes, err := stub.GetState(SHOP_HOLDER)
+	if err != nil {	fmt.Printf("RETRIEVE_shop_HOLDER ERROR: Corrupt shop record "+string(shopsBytes)+": %s", err); 
+					return shop_holder, errors.New("RETRIEVE_shop_HOLDER ERROR: Corrupt shop record"+string(shopsBytes))	}
+	fmt.Printf("------------add shop - shop_holder bytes: "+string(shopsBytes)); 
+
+	err = json.Unmarshal(shopsBytes, &shop_holder);						
+	if err != nil {	fmt.Printf("Unmarshal_shop_HOLDER ERROR: Corrupt shops record "+string(shopsBytes)+": %s", err); 
+					return shop_holder, errors.New("Unmarshal_shop_HOLDER ERROR: Corrupt shop record"+string(shopsBytes))	}
+	return shop_holder, nil
+}
+
+
+func (t *CardTransactionChaincode) save_shop_holder(stub shim.ChaincodeStubInterface, shop_holder Shop_Holder) ([]byte, error) {
+
+	shopsBytes, err := json.Marshal(shop_holder)
+		if err != nil { fmt.Printf("save shop holder error: Marshal(shop_holder) error"); 
+						return nil, errors.New("save shop holder error: Marshal(shop_holder) error") }
+	
+	fmt.Printf("json.Marshal(shop_holder) bytes: "+string(shopsBytes)); 
+
+	err = stub.PutState(SHOP_HOLDER, shopsBytes)
+	if err != nil {
+		fmt.Printf("Error storing shop_holder: %s", err)
+		return nil, errors.New("Error storing shop_holder: " )
+	}
+	
+	fmt.Printf("------------store shop holder success")
+	//return
+	return shopsBytes, nil
+}
+
+
+func (t *CardTransactionChaincode) add_shop(stub shim.ChaincodeStubInterface, shop Shop) ([]byte, error) {
+	
+	shopbytes, err := stub.GetState(shop.ShopId)
+		if err != nil {	fmt.Printf("query user " + string(shopbytes) + " from state error: %s", err); 
+					return nil, errors.New("query user " + string(shopbytes) + " from state error")	}
+	
+		if shopbytes != nil {	fmt.Printf("shop " + shop.ShopId + " already exists"); 
+					return shopbytes, errors.New("shop " + shop.ShopId + " already exists")	}
+	
+	shopbytes, err = json.Marshal(shop)
+	if err != nil { return nil, errors.New("Error creating shop bytes") }
+	
+	fmt.Printf("------------add shop - new shop bytes: "+string(shopbytes)); 
+
+	//add whole shop object to shop_holder
+	shop_holder, err := t.get_shop_holder(stub)
+	
+	fmt.Printf("------------add shop - shop_holder shops num: " + string(len(shop_holder.Shops))); 
+
+	shop_holder.Shops = append(shop_holder.Shops, string(shopbytes))
+
+    fmt.Printf("------------add shop - new shop_holder shops num: " + string(len(shop_holder.Shops)));
+
+	t.save_shop_holder(stub, shop_holder)
+
+	//store shop object to world state
+	err = stub.PutState(shop.ShopId, shopbytes)
+	if err != nil {
+		fmt.Printf("------------put states by shop.Identity: %s", err)
+		fmt.Printf("------------put states error,shop iendtiry: "+ shop.ShopId)
+		return nil, errors.New("Error storing shop: " + shop.ShopId)
+	}
+	return nil, nil
+
+}
+
+
+
+func (t *CardTransactionChaincode) update_shop(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, shop Shop) ([]byte, error) {
+	
+	_, err := t.delete_shop(stub, caller, caller_affiliation, shop.ShopId)
+	if err != nil {
+		fmt.Printf("Error update shop: %s", err)
+		return nil, errors.New("Error update shop: ")
+	}
+
+	return t.add_shop(stub, shop)
+}
+
+//==============================================================================================================================
+//	 get_shops - query shop_holder for all shops
+//        para - caller: for check permission. Not used now
+//==============================================================================================================================
+func (t *CardTransactionChaincode) get_shops(stub shim.ChaincodeStubInterface,caller string) ([]byte, error) {
+
+	//caller_affiliation, _ := t.check_affiliation(stub, caller)
+
+	//if caller_affiliation == KAKACENTER {
+		shopsBytes, err := stub.GetState(SHOP_HOLDER)
+		if err != nil {	fmt.Printf("RETRIEVE_shop_HOLDER ERROR: Corrupt shop record "+string(shopsBytes)+": %s", err); 
+					return shopsBytes, errors.New("RETRIEVE_shop_HOLDER ERROR: Corrupt shops record"+string(shopsBytes))	}
+	
+		fmt.Printf("get shops from Shop_Holder bytes: "+string(shopsBytes)); 
+
+		return shopsBytes, nil
+	//}
+
+	//return nil, errors.New("Permission denied: you are not KAKACENTER shops ")
+	
+}
+
+//==============================================================================================================================
+//	 get_shop_detail - query shop object with permission check. But no check now. so para caller not used yet
+//==============================================================================================================================
+func (t *CardTransactionChaincode) get_shop_detail(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, shopId string) ([]byte, error) {
+	
+	shop, err := t.get_shop_detail_Internal(stub, shopId)
+    if err != nil { fmt.Printf("get_shop_detail_Internal error"); 
+						return nil, errors.New("get_shop_detail_Internal error") }
+	
+	sbytes, err := json.Marshal(shop)
+		if err != nil { fmt.Printf("Marshal shop error"); 
+						return nil, errors.New("Marshal shop error") }
+	fmt.Printf("Marshal shop :" + string(sbytes) ); 
+	return sbytes, nil
+}
+
+
+//==============================================================================================================================
+//	 get_shop_detail_Internal - query shop object from state without permission check
+//==============================================================================================================================
+func (t *CardTransactionChaincode) get_shop_detail_Internal(stub shim.ChaincodeStubInterface, shopId string) (Shop, error) {
+	
+	var shop Shop
+
+	sbytes, err := stub.GetState(shopId)
+		if err != nil {	fmt.Printf("query shop " + string(sbytes) + " from state error: %s", err); 
+					return shop, errors.New("query shop " + string(sbytes) + " from state error")	}
+	
+		if sbytes == nil {	fmt.Printf("Error: no shop " + shopId + " in world state"); 
+					return shop, errors.New("Error: no shop " + shopId + " in world state")	}
+	
+	fmt.Printf("Get shop bytes from state : "+string(sbytes)); 
+
+	err = json.Unmarshal(sbytes, &shop);						
+		if err != nil {	fmt.Printf("Unmarshal sbytes error:  %s", err); 
+						return shop, errors.New("Unmarshal sbytes error")	}
+						
+	fmt.Printf("Unmarshal sbytes of shop:  %s", shop.ShopId)
+
+	return shop, nil
+}
+
+
+//==============================================================================================================================
+//	 delete_shop - 
+//==============================================================================================================================
+func (t *CardTransactionChaincode) delete_shop(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, shopId string) ([]byte, error) {
+	
+	shopbytes, err := t.get_shop_detail(stub, caller, caller_affiliation, shopId)
+	if err != nil {	fmt.Printf("query shop from state error: %s", err); 
+					return shopbytes, errors.New("query shop from state error")	}
+	fmt.Printf("Get shop bytes from state : " + shopId); 
+
+	//delete from state
+	err = stub.DelState(shopId)
+		if err != nil {	fmt.Printf("delete shop " + shopId + " from state error: %s", err); 
+					return shopbytes, errors.New("query shop " + shopId + " from state error")	}
+	fmt.Printf("Delete shop bytes from state success : "+shopId); 
+
+
+	//delete from shop_holder
+	shop_holder, err := t.get_shop_holder(stub)
+	
+	var u Shop
+	ifdelete := 0
+	for index, shopStr := range shop_holder.Shops {
+		err = json.Unmarshal([]byte(shopStr), &u);						
+		if err != nil {	fmt.Printf("Unmarshal_shopStr: Corrupt shop record "+shopStr+": %s", err); 
+		return nil, errors.New("Unmarshal_shopStr: Corrupt shop record"+shopStr)	}
+	
+		if u.ShopId == shopId {
+			shop_holder.Shops = append(shop_holder.Shops[:index], shop_holder.Shops[index+1:]...) 
+			ifdelete = 1
+			break
+		}
+	}
+
+	if ifdelete == 1 {
+		fmt.Printf("delete shop from shop_holder success: "+shopId); 
+	}else{
+		fmt.Printf("no delete shop from shop_holder: "+shopId); 
+	}
+
+	t.save_shop_holder(stub, shop_holder)
+	
+	//return
+	return shopbytes, nil
+	
+}
+
+
+// end manage user and shop
+//////////////////////////////////////////////////////////////////////////////////////////////
+
 func (t *CardTransactionChaincode) get_shopLedgerID(shop string, templateID string) (string) {
-	return templateID + "-" + shop
+	return "shopledger-" + templateID
 }
 
 func (t *CardTransactionChaincode) add_new_shopLedger(stub shim.ChaincodeStubInterface, shopid string, templateID string) ([]byte, error) {
@@ -224,8 +721,30 @@ func (t *CardTransactionChaincode) add_new_shopLedger(stub shim.ChaincodeStubInt
 	return []byte(shopLedger_json), nil
 }
 
+func (t *CardTransactionChaincode) get_shopLedger(stub shim.ChaincodeStubInterface,  caller string, caller_affiliation int, shopid string, templateID string) ([]byte, error) {
+	
+	authed := 0
+	if 		caller_affiliation	== KAKACENTER {
+		authed = 1
+		
+	}else if 	caller_affiliation	== SHOP {
+			template, err := t.retrieve_card(stub, templateID)
+				if err != nil {return nil, errors.New("Failed to retrieve card template: " + templateID)}
+		
+			if template.Owner == caller {
+				authed = 1
+			}
+	}
+	
+	if authed== 0 {
+		fmt.Printf("Permission denied"); 
+		return nil, errors.New("Permission denied")
+	}
+																																			
+	return t.get_shopLedger_internal(stub, shopid , templateID )
+}
 
-func (t *CardTransactionChaincode) get_shopLedger(stub shim.ChaincodeStubInterface, shopid string, templateID string) ([]byte, error) {
+func (t *CardTransactionChaincode) get_shopLedger_internal(stub shim.ChaincodeStubInterface, shopid string, templateID string) ([]byte, error) {
 	
 	shopLedgerId := t.get_shopLedgerID(shopid, templateID)
 	shopLedgerBytes, err := stub.GetState(shopLedgerId)
@@ -268,130 +787,6 @@ func (t *CardTransactionChaincode) get_shopLedger_holder(stub shim.ChaincodeStub
 	return shopLedger_holder, nil
 }
 */
-
-func (t *CardTransactionChaincode) add_user(stub shim.ChaincodeStubInterface, user User) ([]byte, error) {
-	
-
-	ubytes, err := json.Marshal(user)
-	if err != nil { return nil, errors.New("Error creating User bytes") }
-	
-	fmt.Printf("------------add user - new user bytes: "+string(ubytes)); 
-
-	var user_holder User_Holder
-	usersBytes, err := stub.GetState(USER_HOLDER)
-	if err != nil {	fmt.Printf("RETRIEVE_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
-					return usersBytes, errors.New("RETRIEVE_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
-	fmt.Printf("------------add user - user_holder bytes: "+string(usersBytes)); 
-
-	err = json.Unmarshal(usersBytes, &user_holder);						
-	if err != nil {	fmt.Printf("Unmarshal_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
-					return usersBytes, errors.New("Unmarshal_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
-	
-	fmt.Printf("------------add user - user_holder users num: " + string(len(user_holder.Users))); 
-
-	user_holder.Users = append(user_holder.Users, string(ubytes))
-
-    fmt.Printf("------------add user - new user_holder users num: " + string(len(user_holder.Users)));
-
-	usersBytes, err = json.Marshal(user_holder)
-	if err != nil { fmt.Printf("SAVE_CHANGES: Error converting card card record: %s", err); return nil, errors.New("Error converting card record") }
-	
-	fmt.Printf("------------add user - new user_holder bytes: "+string(usersBytes)); 
-
-	err = stub.PutState(USER_HOLDER, usersBytes)
-
-
-	if err != nil {
-		fmt.Printf("------------put states error: %s", err)
-		fmt.Printf("------------put states error,user iendtiry: "+ user.Identity)
-		return nil, errors.New("Error storing user: " + user.Identity )
-	}
-	
-	fmt.Printf("------------put states success,user iendtiry: "+ user.Identity)
-
-	return nil, nil
-
-}
-
-//==============================================================================================================================
-//	 check_affiliation
-//==============================================================================================================================
-
-func (t *CardTransactionChaincode) check_affiliation(stub shim.ChaincodeStubInterface, userName string) (int, error) {
-	
-	user, err := t.get_user_detail_Internal(stub, userName)
-	if err != nil { return -1, err }
-	
-	return user.Affiliation, nil
-}
-
-
-//==============================================================================================================================
-//	 get_users - Takes the name passed and calls out to the REST API for HyperLedger to retrieve the ecert
-//				 for that user. Returns the ecert as retrived including html encoding.
-//==============================================================================================================================
-func (t *CardTransactionChaincode) get_users(stub shim.ChaincodeStubInterface,caller string) ([]byte, error) {
-
-	//caller_affiliation, _ := t.check_affiliation(stub, caller)
-
-	//if caller_affiliation == KAKACENTER {
-		usersBytes, err := stub.GetState(USER_HOLDER)
-		if err != nil {	fmt.Printf("RETRIEVE_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
-					return usersBytes, errors.New("RETRIEVE_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
-	
-		fmt.Printf("get_users , User_Holder bytes: "+string(usersBytes)); 
-
-		return usersBytes, nil
-	//}
-
-	//return nil, errors.New("Permission denied: you are not KAKACENTER users ")
-	
-}
-
-
-//==============================================================================================================================
-//	 get_user_detail - 
-//==============================================================================================================================
-func (t *CardTransactionChaincode) get_user_detail_Internal(stub shim.ChaincodeStubInterface, name string) (User, error) {
-	
-	var u User
-
-	var user_holder User_Holder
-	usersBytes, err := stub.GetState(USER_HOLDER)
-	if err != nil {	fmt.Printf("RETRIEVE_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
-					return u, errors.New("RETRIEVE_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
-	
-	fmt.Printf("User_Holder bytes: "+string(usersBytes)); 
-
-	err = json.Unmarshal(usersBytes, &user_holder);						
-	if err != nil {	fmt.Printf("Unmarshal_USER_HOLDER ERROR: Corrupt users record "+string(usersBytes)+": %s", err); 
-					return u, errors.New("Unmarshal_USER_HOLDER ERROR: Corrupt users record"+string(usersBytes))	}
-	
-	
-	
-	for _, userStr := range user_holder.Users {
-		
-
-		err = json.Unmarshal([]byte(userStr), &u);						
-		if err != nil {	fmt.Printf("Unmarshal_userStr: Corrupt user record "+userStr+": %s", err); 
-		return u, errors.New("Unmarshal_userStr: Corrupt user record"+userStr)	}
-	
-		if u.Identity == name {return u,nil}
-		
-	}
-	if err != nil { return u, errors.New("Couldn't retrieve user (" + name + ") from user_holder ") }
-	
-	return u, nil
-}
-
-
-//==============================================================================================================================
-//	 get_user_detail - 
-//==============================================================================================================================
-func (t *CardTransactionChaincode) get_user_detail(stub shim.ChaincodeStubInterface, caller string, name string) (User, error) {
-	
-	return t.get_user_detail_Internal(stub, name)
-}
 
 
 
@@ -470,6 +865,10 @@ func (t *CardTransactionChaincode) Invoke(stub shim.ChaincodeStubInterface, func
 	
 	//caller, caller_affiliation, err := t.get_caller_data(stub)
 	caller := args[0]
+	ifuserAuthed, err := t.check_user(stub, caller)
+	if (err != nil  || ifuserAuthed < 1){
+		return nil, errors.New("cannot find this user:" + caller)
+	}
  	caller_affiliation , err := t.check_affiliation(stub, caller)
 	if err != nil  { return nil, errors.New("Invalid caller_affiliation value passed") }
 	
@@ -478,22 +877,82 @@ func (t *CardTransactionChaincode) Invoke(stub shim.ChaincodeStubInterface, func
 
 	if function == "add_user" { 
 		var user User
-		user.Identity = args[0]
-		user.ECert = args[1]
-		user.Affiliation, err = strconv.Atoi(args[2])
-		if err != nil { fmt.Printf("strconv.Atoi(args[2]) error: ", err); 
-						return nil, errors.New("strconv.Atoi(args[2]) error") }
+		user.Identity = args[cardIDPos]
+		user.Name = args[cardIDPos + 1]
+		user.ECert = args[cardIDPos + 2]
+		user.Affiliation, err = strconv.Atoi(args[cardIDPos + 3])
+			if err != nil { fmt.Printf("Error, affiliation is not int : ", err); 
+							return nil, errors.New("Error, affiliation is not int ") }
+		user.AuthId = args[cardIDPos + 4]
 		return t.add_user(stub, user)
 
-	} else if function == "create_card_template" { 
-		fmt.Printf("------------create template function----------");
-		return t.create_card_template(stub, caller, caller_affiliation, args[cardIDPos])
+	} else if function == "update_user" {  // same with add_user
+		var user User
+		user.Identity = args[cardIDPos]
+		user.Name = args[cardIDPos + 1]
+		user.ECert = args[cardIDPos + 2]
+		user.Affiliation, err = strconv.Atoi(args[cardIDPos + 3])
+			if err != nil { fmt.Printf("Error, affiliation is not int : ", err); 
+							return nil, errors.New("Error, affiliation is not int ") }
+		user.AuthId = args[cardIDPos + 4]
+		return t.update_user(stub, caller, caller_affiliation, user)
+
+	} else if function == "delete_user" {  // same with add_user
+		delUserId := args[cardIDPos]
+		return t.delete_user(stub, caller, caller_affiliation, delUserId)
+
+
+
+	} else if function == "add_shop" { 
+		var shop Shop
+		shop.ShopId = args[cardIDPos]
+		shop.ShopName = args[cardIDPos + 1]
+		shop.LicenseNum = args[cardIDPos + 2]
+		shop.Category = args[cardIDPos + 3]
+		shop.Address = args[cardIDPos + 4]
+		shop.Contact = args[cardIDPos + 5]
+		return t.add_shop(stub, shop)
+
+	} else if function == "update_shop" {  // same with add_shop
+		var shop Shop
+		shop.ShopId = args[cardIDPos]
+		shop.ShopName = args[cardIDPos + 1]
+		shop.LicenseNum = args[cardIDPos + 2]
+		shop.Category = args[cardIDPos + 3]
+		shop.Address = args[cardIDPos + 4]
+		shop.Contact = args[cardIDPos + 5]
+		return t.update_shop(stub, caller, caller_affiliation, shop)
+
+	} else if function == "delete_shop" {  // same with add_shop
+		delShopId := args[cardIDPos]
+		return t.delete_shop(stub, caller, caller_affiliation, delShopId)
+
+
+
+
 
 	} else if function == "create_card_template_by_shop" { 
 		fmt.Printf("------------create create_card_template_by_shop function----------");
 		templateId := args[cardIDPos]
 		templateJson := args[cardIDPos + 1]
 		return t.create_card_template_by_shop(stub, caller, caller_affiliation, templateId, templateJson)
+
+	} else if function == "request_card_by_template" { 
+		fmt.Printf("------------request_card_by_template function----------");
+		templateId := args[cardIDPos]
+		return t.request_card_by_template(stub, caller, caller_affiliation, templateId)
+
+	} else if function == "push_card_by_template" { 
+		fmt.Printf("------------push_card_by_template function----------");
+		ownerId := args[cardIDPos]
+		templateId := args[cardIDPos + 1]
+		return t.push_card_by_template(stub, caller, caller_affiliation, ownerId, templateId)
+
+
+
+	} else if function == "create_card_template" { 
+		fmt.Printf("------------create template function----------");
+		return t.create_card_template(stub, caller, caller_affiliation, args[cardIDPos])
 
 	} else if function == "transfer_template_to_shop" {
 
@@ -513,15 +972,15 @@ func (t *CardTransactionChaincode) Invoke(stub shim.ChaincodeStubInterface, func
 
 	//	return t.update_template(stub, caller, caller_affiliation, cardTemplateId, updatedCardJson)
 
-	} else if function == "create_card_by_template" { 
+	} else if function == "create_batch_card_by_template" { 
 		cardTemplateId := args[1]
 		cardNum, err := strconv.Atoi(args[2])
 		if err != nil { fmt.Printf("strconv.Atoi(args[2]) card number error: ", err); 
 						return nil, errors.New("strconv.Atoi(args[3]) card number error") }
 
-		//create_card_by_template(stub , caller string, caller_affiliation int, 
+		//create_batch_card_by_template(stub , caller string, caller_affiliation int, 
 		//							cardTemplate_KakaIDs string, initCard Card, cardIDPrefix string, cardNum int)
-		return t.create_card_by_template(stub, caller, caller_affiliation, cardTemplateId, cardNum)
+		return t.create_batch_card_by_template(stub, caller, caller_affiliation, cardTemplateId, cardNum)
 
 	} else if function == "scrap_card" {
 		
@@ -539,18 +998,18 @@ func (t *CardTransactionChaincode) Invoke(stub shim.ChaincodeStubInterface, func
 		if err != nil { fmt.Printf("INVOKE: Error retrieving v5c: %s", err); 
 						return nil, errors.New("Error retrieving v5c") }
 
-		if function == "update_shop"  	    { return t.update_shop(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_shopid"       { return t.update_shopid(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_cardid"       { return t.update_cardid(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_category" 	{ return t.update_category(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_cardlevel" 	{ return t.update_cardlevel(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_cardclass" 	{ return t.update_cardclass(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_tel" 			{ return t.update_tel(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_password" 	{ return t.update_password(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_money" 		{ return t.update_money(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_point" 		{ return t.update_point(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_expdate" 		{ return t.update_expdate(stub, card, caller, caller_affiliation, newValue)
-		} else if function == "update_expired" 		{ return t.update_expired(stub, card, caller, caller_affiliation, newValue)}
+		if function == "update_ct_shopname"  	    { return t.update_ct_shopname(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_shopid"       { return t.update_ct_shopid(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_cardid"       { return t.update_ct_cardid(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_category" 	{ return t.update_ct_category(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_cardlevel" 	{ return t.update_ct_cardlevel(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_cardclass" 	{ return t.update_ct_cardclass(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_tel" 			{ return t.update_ct_tel(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_password" 	{ return t.update_ct_password(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_money" 		{ return t.update_ct_money(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_point" 		{ return t.update_ct_point(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_expdate" 		{ return t.update_ct_expdate(stub, card, caller, caller_affiliation, newValue)
+		} else if function == "update_ct_expired" 		{ return t.update_ct_expired(stub, card, caller, caller_affiliation, newValue)}
 
 	} else if strings.Contains(function, "transfer_card") == true{
 		
@@ -644,22 +1103,40 @@ func (t *CardTransactionChaincode) Query(stub shim.ChaincodeStubInterface, funct
 	if err != nil  { return nil, errors.New("Invalid caller_affiliation value") }
 															
 	if function == "get_users" { 
-		caller := args[0]
+		fmt.Printf("exec function:  get_users "); 
 		return t.get_users(stub, caller)
+
 	} else if function == "get_user_detail" { 
-		caller := args[0]
-		userName := args[1]
-		user,err :=  t.get_user_detail(stub, caller, userName)
+		fmt.Printf("exec function:  get_user_detail "); 
+		userId := args[1]
+		ubytes,err :=  t.get_user_detail(stub, caller, caller_affiliation, userId)
 		if err != nil { fmt.Printf("get_user_detail error: ", err); 
 						return nil, errors.New("get_user_detail error") }
 
-		vbytes, err := json.Marshal(user)
-		if err != nil { fmt.Printf("json.Marshal(user): ", err); 
-						return nil, errors.New("json.Marshal(user)") }
+		return ubytes, nil
 
-		return vbytes, nil
+
+
+
+	} else if function == "get_shops" { 
+		fmt.Printf("exec function:  get_shops "); 
+		return t.get_shops(stub, caller)
+
+	} else if function == "get_shop_detail" { 
+		fmt.Printf("exec function:  get_shop_detail "); 
+		shopId := args[1]
+		shopbytes,err :=  t.get_shop_detail(stub, caller, caller_affiliation, shopId)
+		if err != nil { fmt.Printf("get_shop_detail error: ", err); 
+						return nil, errors.New("get_shop_detail error") }
+
+		return shopbytes, nil
+
+
+
+
 	} else if function == "get_card_details" { 
-	
+		fmt.Printf("exec function:  get_user_detail "); 
+		
 			if len(args) != 2 { fmt.Printf("Incorrect number of arguments passed"); 
 				return nil, errors.New("QUERY: Incorrect number of arguments passed") }
 	
@@ -675,9 +1152,9 @@ func (t *CardTransactionChaincode) Query(stub shim.ChaincodeStubInterface, funct
 	} else if function == "get_card_templates" {
 			return t.get_card_templates(stub, caller, caller_affiliation)
 	} else if function == "get_shopLedger" {
-			shopid := args[0]
-			templateid := args[1]
-			return t.get_shopLedger(stub, shopid, templateid)
+			shopid := args[1]
+			templateid := args[2]
+			return t.get_shopLedger(stub, caller, caller_affiliation, shopid, templateid)
 	}   
 
 	return nil, errors.New("Received unknown function invocation")
@@ -724,12 +1201,12 @@ func (t *CardTransactionChaincode) kakacenter_to_shop(stub shim.ChaincodeStubInt
 //   save_card - Writes to the ledger the Card struct passed in a JSON format. Uses the shim file's 
 //				  method 'PutState'.
 //==============================================================================================================================
-func (t *CardTransactionChaincode) save_template(stub shim.ChaincodeStubInterface, v Card) (bool, error) {
+func (t *CardTransactionChaincode) save_template(stub shim.ChaincodeStubInterface, v Card, templateId string) (bool, error) {
 	 
 	bytes, err := json.Marshal(v)
 	if err != nil { fmt.Printf("SAVE_CHANGES: Error converting card card record: %s", err); return false, errors.New("Error converting card record") }
 
-	err = stub.PutState(v.Kakaid, bytes)
+	err = stub.PutState(templateId, bytes)
 	if err != nil { fmt.Printf("SAVE_CHANGES: Error storing  card record: %s", err); return false, errors.New("Error storing card record") }
 
 	return true, nil
@@ -797,20 +1274,20 @@ func (t *CardTransactionChaincode) create_card_template(stub shim.ChaincodeStubI
 	var v Card																																									
 
 	kakaid          := "\"Kakaid\":\""+templateID+"\", "	
-	cardid          := "\"Cardid\":\"UNDEFINED\", "							
-	shop            := "\"Shop\":\"UNDEFINED\", "
-	shopid          := "\"Shopid\":\"UNDEFINED\", "
-	category        := "\"Category\":\"UNDEFINED\", "
-	cardlevel       := "\"Cardlevel\":\"UNDEFINED\", "
-	cardclass       := "\"Cardclass\":\"UNDEFINED\", "
+	cardid          := "\"Cardid\":\"\", "							
+	shop            := "\"Shop\":\"\", "
+	shopid          := "\"Shopid\":\"\", "
+	category        := "\"Category\":\"\", "
+	cardlevel       := "\"Cardlevel\":\"\", "
+	cardclass       := "\"Cardclass\":\"\", "
 	owner           := "\"Owner\":\""+caller+"\", "
-	tel             := "\"Tel\":\"UNDEFINED\", "
-	password   	    := "\"Password\":\"UNDEFINED\", "
+	tel             := "\"Tel\":\"\", "
+	password   	    := "\"Password\":\"\", "
 	money           := "\"Money\":0, "
 	point           := "\"Point\":0, "
-	releasedate     := "\"Releasedate\":\"UNDEFINED\", "
-	expdate         := "\"Expdate\":\"UNDEFINED\", "
-	getdate         := "\"Getdate\":\"UNDEFINED\", "
+	releasedate     := "\"Releasedate\":\"\", "
+	expdate         := "\"Expdate\":\"\", "
+	getdate         := "\"Getdate\":\"\", "
 	expired			:= "\"Expired\":false, "
 	scrapped       	:= "\"Scrapped\":false, "
 	status       	:= "\"Status\":0 "
@@ -848,7 +1325,7 @@ func (t *CardTransactionChaincode) create_card_template(stub shim.ChaincodeStubI
 	fmt.Printf("test 2 ");
 
 	//save template
-	_, err  = t.save_template(stub, v)									
+	_, err  = t.save_template(stub, v, templateID)									
 		if err != nil { fmt.Printf("CREATE_CARD_TEMPLATE: Error saving changes: %s", err); 
 						return nil, errors.New("Error saving changes") }
 	
@@ -885,106 +1362,6 @@ func (t *CardTransactionChaincode) create_card_template(stub shim.ChaincodeStubI
 
 }
 
-
-//=================================================================================================================================									
-//	 Create Card Template  by Shop						
-//=================================================================================================================================
-
-func (t *CardTransactionChaincode) create_card_template_by_shop(stub *shim.ChaincodeStub, caller string, caller_affiliation int, templateID string, templateJson string) ([]byte, error) {								
-
-	fmt.Printf("start  create_card_template_by_shop \n ");
-
-	// build Card obejct by json
-	var v Card																																									
-	/*
-	kakaid          := "\"Kakaid\":\""+templateID+"\", "	
-	cardid          := "\"Cardid\":\"UNDEFINED\", "							
-	shop            := "\"Shop\":\"UNDEFINED\", "
-	shopid          := "\"Shopid\":\"UNDEFINED\", "
-	category        := "\"Category\":\"UNDEFINED\", "
-	cardlevel       := "\"Cardlevel\":\"UNDEFINED\", "
-	cardclass       := "\"Cardclass\":\"UNDEFINED\", "
-	owner           := "\"Owner\":\""+caller+"\", "
-	tel             := "\"Tel\":\"UNDEFINED\", "
-	password   	    := "\"Password\":\"UNDEFINED\", "
-	money           := "\"Money\":0, "
-	point           := "\"Point\":0, "
-	releasedate     := "\"Releasedate\":\"UNDEFINED\", "
-	expdate         := "\"Expdate\":\"UNDEFINED\", "
-	getdate         := "\"Getdate\":\"UNDEFINED\", "
-	expired			:= "\"Expired\":false, "
-	scrapped       	:= "\"Scrapped\":false, "
-	status       	:= "\"Status\":0 "
-
-	card_json := "{"+kakaid+cardid+shop+shopid+category+cardlevel+cardclass+owner+tel+password+money+point+releasedate+expdate+getdate+expired+scrapped+status+"}" 	// Concatenates the variables to create the total JSON object
-	*/
-	
-	fmt.Printf("test json: %s ",templateJson);
-
-	err := json.Unmarshal([]byte(templateJson), &v)		//  new card json -> Card Object
-	fmt.Printf("test 04 ");
-		if err != nil { 
-			fmt.Printf("test err is not nil , err is : %s",err);
-			return nil, errors.New("Invalid JSON object") 
-			
-			}
-
-	fmt.Printf("json to card tempalte object ");
-	fmt.Printf("json to card tempalte object :  kakaid = %s", v.Kakaid);
-	fmt.Printf("json to card tempalte object :  cardid = %s", v.Cardid);
-	fmt.Printf("json to card tempalte object :  owner = %s", v.Owner);
-
-	//if auth to create template
-	if 	caller_affiliation != KAKACENTER && caller_affiliation != SHOP{							// Only the regulator can create a new v5c
-		return nil, errors.New("Permission Denied")
-	}
-
-	matched, err := regexp.Match("^[A-z][A-z][A-z]", []byte(templateID))  	// 2 char + 5 digits
-		if err != nil  || matched ==false { fmt.Printf("CREATE_CARD: Invalid cardID: %s", err); return nil, errors.New("Invalid v5cID") }
-	
-	fmt.Printf("test 0 : %s",templateID);
-	record, err := stub.GetState(templateID) 			// check if card already exists
-	fmt.Printf("test 1 ");
-		if record != nil { return nil, errors.New("Card already exists") }
-	fmt.Printf("test 2 ");
-
-	//save template
-	_, err  = t.save_template(stub, v)									
-		if err != nil { fmt.Printf("CREATE_CARD_TEMPLATE: Error saving changes: %s", err); 
-						return nil, errors.New("Error saving changes") }
-	
-	fmt.Printf("save tamplate ok");
-
-	//save cardID in CARD_TEMPLATE_HOLDER
-	bytes, err := stub.GetState(CARD_TEMPLATE_HOLDER)
-		if err != nil { return nil, errors.New("Unable to get cardKakaIDs") }
-	
-	fmt.Print("get state this template  : %s", string(bytes))
-																	
-	var card_template_holder Card_Holder
-	
-	if len(bytes)!=0 {
-		fmt.Print(" template holder have data : %s", string(bytes))
-		
-		err = json.Unmarshal(bytes, &card_template_holder)
-		if err != nil {	return nil, errors.New("Corrupt Card_Template_Holder record") }
-	}
-	
-
-	card_template_holder.Cards = append(card_template_holder.Cards, templateID)
-	
-	fmt.Print("Marshal, holder num: %s ", string(len(card_template_holder.Cards)))
-	bytes, err = json.Marshal(card_template_holder)
-		if err != nil { fmt.Print("Error creating Card_Template_Holder record") }
-
-	fmt.Print("put state this template : %s", string(bytes))
-
-	err = stub.PutState(CARD_TEMPLATE_HOLDER, bytes)
-		if err != nil { return nil, errors.New("Unable to put the CARD_TEMPLATE_HOLDER state") }
-	
-	return nil, nil
-
-}
 
 //=================================================================================================================================
 //	 transfer temaplte from kakacenter to shop
@@ -992,7 +1369,7 @@ func (t *CardTransactionChaincode) create_card_template_by_shop(stub *shim.Chain
 func (t *CardTransactionChaincode) transfer_template_to_shop(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
 
 
-	if      v.Kakaid	== "UNDEFINED" {					//If key part of the card is undefined it has not been fully manufacturered so cannot be sent
+	if      v.Kakaid	== "" {					//If key part of the card is empty it has not been fully manufacturered so cannot be sent
 					fmt.Printf("SHOP_TO_CONSUMER: Car not fully defined")
 					return nil, errors.New("Car not fully defined")
 	}
@@ -1014,13 +1391,94 @@ func (t *CardTransactionChaincode) transfer_template_to_shop(stub shim.Chaincode
 															return nil, errors.New("Permission denied")
 	}
 	
-	_, err := t.save_template(stub, v)
+	_, err := t.save_template(stub, v, v.Kakaid)
 	
 															if err != nil { fmt.Printf("SHOP_TO_CONSUMER: Error saving changes: %s", err); return nil, errors.New("Error saving changes") }
 	
 	return nil, nil
 	
 }
+
+
+//=================================================================================================================================									
+//	 Create Card Template  by Shop						
+//=================================================================================================================================
+
+func (t *CardTransactionChaincode) create_card_template_by_shop(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, templateID string, templateJson string) ([]byte, error) {								
+
+	fmt.Printf("start  create_card_template_by_shop \n ");
+
+	// build Card obejct by json
+	var v Card																																									
+	
+	fmt.Printf("test json: %s ",templateJson);
+
+	err := json.Unmarshal([]byte(templateJson), &v)		//  new card json -> Card Object
+	fmt.Printf("test 04 ");
+		if err != nil { 
+			fmt.Printf("test err is not nil , err is : %s",err);
+			return nil, errors.New("Invalid JSON object") 
+			
+			}
+
+	fmt.Printf("json to card tempalte object ");
+	fmt.Printf("json to card tempalte object :  kakaid = %s", v.Kakaid);
+	fmt.Printf("json to card tempalte object :  cardid = %s", v.Cardid);
+	fmt.Printf("json to card tempalte object :  owner = %s", v.Owner);
+
+	//if auth to create template
+	if 	caller_affiliation != KAKACENTER && caller_affiliation != SHOP{							// Only the regulator can create a new v5c
+		return nil, errors.New("Permission Denied")
+	}
+
+
+	//matched, err := regexp.Match("^[A-z][A-z][A-z]", []byte(templateID))  	// 2 char + 5 digits
+	//	if err != nil  || matched ==false { fmt.Printf("CREATE_CARD: Invalid cardID: %s", err); return nil, errors.New("Invalid v5cID") }
+	
+	fmt.Printf("test 0 : %s",templateID);
+	record, err := stub.GetState(templateID) 			// check if template already exists
+	fmt.Printf("test 1 ");
+		if record != nil { return nil, errors.New("template already exists") }
+	fmt.Printf("test 2 ");
+
+	//save template
+	_, err  = t.save_template(stub, v, templateID)									
+		if err != nil { fmt.Printf("CREATE_CARD_TEMPLATE: Error saving changes: %s", err); 
+						return nil, errors.New("Error saving changes") }
+	
+	fmt.Printf("save tamplate ok");
+
+	//save cardID in CARD_TEMPLATE_HOLDER
+	bytes, err := stub.GetState(CARD_TEMPLATE_HOLDER)
+		if err != nil { return nil, errors.New("Unable to get cardKakaIDs") }
+	
+	fmt.Print("get state this template  : %s", string(bytes))
+																	
+	var card_template_holder Card_Holder
+	
+	if len(bytes)!=0 {
+		fmt.Print(" template holder have data : %s", string(bytes))
+		
+		err = json.Unmarshal(bytes, &card_template_holder)
+		if err != nil {	return nil, errors.New("Corrupt Card_Template_Holder record") }
+	}
+	
+
+	card_template_holder.Cards = append(card_template_holder.Cards, templateID)
+	
+	fmt.Print("Marshal, holder num: %s ", string(len(card_template_holder.Cards)))
+	bytes, err = json.Marshal(card_template_holder)
+		if err != nil { fmt.Print("Error creating Card_Template_Holder record") }
+
+	fmt.Print("put state this template : %s", string(bytes))
+
+	err = stub.PutState(CARD_TEMPLATE_HOLDER, bytes)
+		if err != nil { return nil, errors.New("Unable to put the CARD_TEMPLATE_HOLDER state") }
+	
+	return nil, nil
+
+}
+
 /*
 func (t *CardTransactionChaincode) update_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int,cardTemplateId string, updatedCardJson string)([]byte, error) {
 	
@@ -1060,14 +1518,14 @@ func (t *CardTransactionChaincode) checkCardId(cardId string) (bool) {
 	return strings.Contains(cardId, "-")
 }
 
-func (t *CardTransactionChaincode) create_card_by_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, cardTemplate_KakaIDs string, cardNum int) ([]byte, error) {								
+func (t *CardTransactionChaincode) create_batch_card_by_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, cardTemplate_KakaIDs string, cardNum int) ([]byte, error) {								
 
 	if 	caller_affiliation != SHOP {							// Only the regulator can create a new v5c
 		return nil, errors.New("Permission Denied")
 	}
 
-	matched, err := regexp.Match("^[A-z][A-z][A-z]", []byte(cardTemplate_KakaIDs))  	// 2 char + 5 digits
-		if err != nil   || matched ==false { fmt.Printf("CREATE_CARD: Invalid cardID: %s", err); return nil, errors.New("Invalid v5cID") }
+	//matched, err := regexp.Match("^[A-z][A-z][A-z]", []byte(cardTemplate_KakaIDs))  	// 2 char + 5 digits
+	//	if err != nil   || matched ==false { fmt.Printf("CREATE_CARD: Invalid cardID: %s", err); return nil, errors.New("Invalid v5cID") }
 	
 	cardTemplateBytes, err := stub.GetState(cardTemplate_KakaIDs) 			// check if card template exists
 		if cardTemplateBytes == nil { return nil, errors.New("Card temaplte is not exists") }
@@ -1077,10 +1535,10 @@ func (t *CardTransactionChaincode) create_card_by_template(stub shim.ChaincodeSt
 			if err != nil { return nil, errors.New("------------Invalid cardTemplateBytes JSON object") }
 
 	
-	if 		cardTemplate.Shopid 	 	== "UNDEFINED" || 					
-			cardTemplate.Shop  			== "UNDEFINED" || 
-			cardTemplate.Cardclass 		== "UNDEFINED" || 
-			cardTemplate.Expdate		 == "UNDEFINED"  {					//If key part of the card is undefined it has not been fully manufacturered so cannot be sent
+	if 		cardTemplate.Shopid 	 	== "" || 					
+			cardTemplate.Shop  			== "" || 
+			cardTemplate.Cardclass 		== "" || 
+			cardTemplate.Expdate		 == ""  {					//If key part of the card is empty it has not been fully manufacturered so cannot be sent
 															fmt.Printf("SHOP_TO_CONSUMER: Car template not fully defined")
 															return nil, errors.New("Car template not fully defined")
 	}
@@ -1094,7 +1552,7 @@ func (t *CardTransactionChaincode) create_card_by_template(stub shim.ChaincodeSt
 	//once create new card, create or update shop ledger, 
 	var	shopLedger ShopLedger
 	shopid := t.get_Shopid(stub, caller)
-	shopLedgerBytes ,err := t.get_shopLedger(stub, shopid, cardTemplate_KakaIDs)
+	shopLedgerBytes ,err := t.get_shopLedger_internal(stub,  shopid, cardTemplate_KakaIDs)
 	if shopLedgerBytes == nil {
 		shopLedgerBytes ,err = t.add_new_shopLedger(stub, shopid, cardTemplate_KakaIDs)
 	}
@@ -1165,24 +1623,39 @@ func (t *CardTransactionChaincode) create_card_by_template(stub shim.ChaincodeSt
 //=================================================================================================================================
 //	 manufacturer_to_private
 //=================================================================================================================================
-func (t *CardTransactionChaincode) request_card_by_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, cardTemplate_KakaIDs string) ([]byte, error) {								
 
+func (t *CardTransactionChaincode) request_card_by_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, cardTemplate_KakaIDs string) ([]byte, error) {								
 	if 	caller_affiliation !=  CONSUMER {							// Only the regulator can create a new v5c
 		return nil, errors.New("Permission Denied")
 	}
+	return t.new_card_by_template(stub, caller, cardTemplate_KakaIDs)
+}
 
-	matched, err := regexp.Match("^[A-z][A-z][A-z]", []byte(cardTemplate_KakaIDs))  	// 2 char + 5 digits
-		if err != nil   || matched ==false { fmt.Printf("CREATE_CARD: Invalid cardID: %s", err); return nil, errors.New("Invalid v5cID") }
+func (t *CardTransactionChaincode) push_card_by_template(stub shim.ChaincodeStubInterface, caller string, caller_affiliation int, ownerId string, cardTemplate_KakaIDs string) ([]byte, error) {								
+	if 	caller_affiliation !=  SHOP {							// Only the regulator can create a new v5c
+		return nil, errors.New("Permission Denied")
+	}
+	return t.new_card_by_template(stub, ownerId,cardTemplate_KakaIDs)
+}
+
+func (t *CardTransactionChaincode) new_card_by_template(stub shim.ChaincodeStubInterface,  ownerId string , cardTemplate_KakaIDs string) ([]byte, error) {								
+
+	
+	//matched, err := regexp.Match("^[A-z][A-z][A-z]", []byte(cardTemplate_KakaIDs))  	// 2 char + 5 digits
+	//	if err != nil   || matched ==false { fmt.Printf("CREATE_CARD: Invalid cardID: %s", err); return nil, errors.New("Invalid v5cID") }
 	
 	cardTemplateBytes, err := stub.GetState(cardTemplate_KakaIDs) 			// check if card template exists
 		if cardTemplateBytes == nil { return nil, errors.New("Card temaplte is not exists") }
-	
+	var template Card
+	err = json.Unmarshal(cardTemplateBytes, &template)	
+	if err != nil { return nil, errors.New("------------Invalid template JSON object") }
 
 
 	//once create new card, create or update shop ledger, 
 	var	shopLedger ShopLedger
-	shopid := t.get_Shopid(stub, caller)
-	shopLedgerBytes ,err := t.get_shopLedger(stub, shopid, cardTemplate_KakaIDs)
+	//shopid := t.get_Shopid(stub, caller)
+	shopid := template.Shopid
+	shopLedgerBytes ,err := t.get_shopLedger_internal(stub, shopid, cardTemplate_KakaIDs)
 	if shopLedgerBytes == nil {
 		shopLedgerBytes ,err = t.add_new_shopLedger(stub, shopid, cardTemplate_KakaIDs)
 	}
@@ -1215,7 +1688,7 @@ func (t *CardTransactionChaincode) request_card_by_template(stub shim.ChaincodeS
 	card.Kakaid 		 = 	cardTemplate_KakaIDs	
 	fmt.Printf("CREATE_CARD Kakaid: %s", card.Kakaid);
 
-	card.Owner = caller
+	card.Owner = ownerId
 	card.Status = STATE_CONSUMER_OWNERSHIP
 
 	timestamp := time.Now().Unix()
@@ -1263,11 +1736,11 @@ func (t *CardTransactionChaincode) request_card_by_template(stub shim.ChaincodeS
 func (t *CardTransactionChaincode) transfer_card_shop_to_consumer(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, recipient_name string, recipient_affiliation int) ([]byte, error) {
 
 
-	if 		v.Shop 	 	== "UNDEFINED" || 					
-			v.Cardid  	== "UNDEFINED" || 
-			v.Cardlevel == "UNDEFINED" || 
-			v.Cardclass == "UNDEFINED" || 
-			v.Expdate == "UNDEFINED"  {					//If key part of the card is undefined it has not been fully manufacturered so cannot be sent
+	if 		v.Shop 	 	== "" || 					
+			v.Cardid  	== "" || 
+			v.Cardlevel == "" || 
+			v.Cardclass == "" || 
+			v.Expdate == ""  {					//If key part of the card is empty it has not been fully manufacturered so cannot be sent
 															fmt.Printf("SHOP_TO_CONSUMER: Car not fully defined")
 															return nil, errors.New("Car not fully defined")
 	}
@@ -1437,7 +1910,7 @@ func (t *CardTransactionChaincode) deposit_mp_shop_to_consumer(stub shim.Chainco
 	shopid := t.get_Shopid(stub, caller)
 	// update shop ledger, 
 			var	shopLedger ShopLedger
-			shopLedgerBytes ,err := t.get_shopLedger(stub, shopid, tc.Kakaid)
+			shopLedgerBytes ,err := t.get_shopLedger_internal(stub, shopid, tc.Kakaid)
 			if shopLedgerBytes == nil {
 				fmt.Printf("Permission denied----------------------------")
 					return nil, errors.New("Permission denied")
@@ -1496,7 +1969,7 @@ func (t *CardTransactionChaincode) spend_mp_consumer_to_shop(stub shim.Chaincode
 
 // update shop ledger, 
 			var	shopLedger ShopLedger
-			shopLedgerBytes ,err := t.get_shopLedger(stub, shopid, sc.Kakaid)
+			shopLedgerBytes ,err := t.get_shopLedger_internal(stub, shopid, sc.Kakaid)
 			if shopLedgerBytes == nil {
 				fmt.Printf("pay to wrong shop ,please check shop name--")
 					return nil, errors.New("pay to wrong shop ,please check shop name ")
@@ -1550,7 +2023,7 @@ func (t *CardTransactionChaincode) spend_mp_consumer_to_shop(stub shim.Chaincode
 //	 update_money
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_money(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_money(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	new_money, err := strconv.Atoi(new_value) 		                // will return an error if the new vin contains non numerical chars
 		if err != nil  { return nil, errors.New("Invalid value passed for money") }
@@ -1582,7 +2055,7 @@ func (t *CardTransactionChaincode) update_money(stub shim.ChaincodeStubInterface
 //	 update_point
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_point(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_point(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	new_point, err := strconv.Atoi(new_value)		                // will return an error if the new vin contains non numerical chars
 	if err != nil { return nil, errors.New("Invalid value passed for point") }
@@ -1614,7 +2087,7 @@ func (t *CardTransactionChaincode) update_point(stub shim.ChaincodeStubInterface
 //	 update_shop
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_shopid(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_shopid(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1641,7 +2114,7 @@ func (t *CardTransactionChaincode) update_shopid(stub shim.ChaincodeStubInterfac
 //	 update_shop
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_shop(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_shopname(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1667,7 +2140,7 @@ func (t *CardTransactionChaincode) update_shop(stub shim.ChaincodeStubInterface,
 //	 update_cardid
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_cardid(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_cardid(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1694,7 +2167,7 @@ func (t *CardTransactionChaincode) update_cardid(stub shim.ChaincodeStubInterfac
 //=================================================================================================================================
 
 
-func (t *CardTransactionChaincode) update_cardlevel(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_cardlevel(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1720,7 +2193,7 @@ func (t *CardTransactionChaincode) update_cardlevel(stub shim.ChaincodeStubInter
 //	 update_cardclass
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_cardclass(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_cardclass(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller				&& 
@@ -1746,7 +2219,7 @@ func (t *CardTransactionChaincode) update_cardclass(stub shim.ChaincodeStubInter
 //	 update_password
 //=================================================================================================================================
 
-func (t *CardTransactionChaincode) update_password(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_password(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 	
 	if 		v.Owner				== caller				&& 
 			v.Scrapped			== false				{
@@ -1770,7 +2243,7 @@ func (t *CardTransactionChaincode) update_password(stub shim.ChaincodeStubInterf
 //=================================================================================================================================
 //	 update_expdate
 //=================================================================================================================================
-func (t *CardTransactionChaincode) update_expdate(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_expdate(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 
 	if		v.Status			== STATE_SHOP	&&
 			v.Owner				== caller		&& 
@@ -1785,7 +2258,8 @@ func (t *CardTransactionChaincode) update_expdate(stub shim.ChaincodeStubInterfa
 	
 	_, err := t.save_card(stub, v)
 	
-															if err != nil { fmt.Printf("update_expdate: Error saving changes: %s", err); return nil, errors.New("SCRAP_CARD Error saving changes") }
+	if err != nil { fmt.Printf("update_expdate: Error saving changes: %s", err); 
+		return nil, errors.New(" update_expdate: Error saving changes ") }
 	
 	return nil, nil
 	
@@ -1818,7 +2292,7 @@ func (t *CardTransactionChaincode) scrap_card(stub shim.ChaincodeStubInterface, 
 //=================================================================================================================================
 //	 update_expired
 //=================================================================================================================================
-func (t *CardTransactionChaincode) update_expired(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, isexpired string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_expired(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, isexpired string) ([]byte, error) {
 
 	if		v.Owner				== caller				&& 
 			v.Scrapped			== false {
@@ -1846,7 +2320,7 @@ func (t *CardTransactionChaincode) update_expired(stub shim.ChaincodeStubInterfa
 //=================================================================================================================================
 //	 update_category
 //=================================================================================================================================
-func (t *CardTransactionChaincode) update_category(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_category(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 
 	if		v.Status			== STATE_CONSUMER_OWNERSHIP	&&
 			v.Owner				== caller			&& 
@@ -1871,7 +2345,7 @@ func (t *CardTransactionChaincode) update_category(stub shim.ChaincodeStubInterf
 //=================================================================================================================================
 //	 update_tel
 //=================================================================================================================================
-func (t *CardTransactionChaincode) update_tel(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
+func (t *CardTransactionChaincode) update_ct_tel(stub shim.ChaincodeStubInterface, v Card, caller string, caller_affiliation int, new_value string) ([]byte, error) {
 
 	if		v.Status			== STATE_CONSUMER_OWNERSHIP	&&
 			v.Owner				== caller		&& 
